@@ -6,8 +6,6 @@ import com.controlj.green.webserver.*;
 public class Main implements ServletContextListener {
   private final static String addonName = "PostgreSQL_Connect";
   private volatile boolean stop = false;
-  private volatile boolean stopped = false;
-  private volatile Object obj = new Object();
   private final AddOnInfo info = AddOnInfo.getAddOnInfo();
   private final FileLogger logger = info.getDateStampLogger();
   private final static long timeout = 600L;
@@ -33,26 +31,19 @@ public class Main implements ServletContextListener {
         }
         break;
       }
-      synchronized (obj){
-        stopped = true;
-        obj.notifyAll();
-      }
     }
   };
   @Override public void contextInitialized(ServletContextEvent sce){
     main.start();
   }
   @Override public void contextDestroyed(ServletContextEvent sce){
-    if (!stopped){
-      stop = true;
-      main.interrupt();
-      synchronized (obj){
-        while (!stopped){
-          try{
-            obj.wait(3000L);
-          }catch(Throwable t){}
-        }
-      }
+    stop = true;
+    main.interrupt();
+    while (true){
+      try{
+        main.join();
+        break;
+      }catch(InterruptedException e){}
     }
   }
   private boolean exec() throws Throwable {
@@ -72,7 +63,7 @@ public class Main implements ServletContextListener {
     if (Files.deleteIfExists(addon)){
       Thread.sleep(timeout);
     }
-    Files.move(update,addon);
+    Files.move(update,addon,StandardCopyOption.REPLACE_EXISTING);
     Thread.sleep(timeout);
     AddOn y = null;
     for (AddOn x:server.scanForAddOns()){
